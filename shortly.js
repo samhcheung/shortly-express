@@ -2,6 +2,7 @@ var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
+var session = require('express-session');
 
 
 var db = require('./app/config');
@@ -21,10 +22,28 @@ app.use(bodyParser.json());
 // Parse forms (signup/login)
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
+app.use(session({
+  name: 'server-session-cookie-id',
+  secret: 'my express secret',
+  saveUninitialized: false,
+  resave: false
+}));
 
 
-app.get('/', 
+var restrict = function(req, res, next) {
+  if (req.session.user) {
+    next();
+  } else {
+    req.session.error = 'Access denied!';
+    res.redirect('/login');
+  }
+};
+
+
+
+app.get('/', restrict,
 function(req, res) {
+  console.log('You made it');
   res.render('index');
 });
 
@@ -75,7 +94,57 @@ function(req, res) {
 /************************************************************/
 // Write your authentication routes here
 /************************************************************/
+app.get('/login', 
+function(req, res) {
+  res.render('login');
+});
 
+app.post('/login', 
+function(req, res) {
+  console.log(req.body);
+  console.log(req.session);
+  var username = req.body.username;
+  var password = req.body.password;
+  new User({ username: username }).fetch().then(function(found) {
+    if (found.get('password') === password) {
+      console.log('found the user in the database and logged in');
+      req.session.regenerate( function() {
+        req.session.user = username;
+        res.redirect('/');
+      });
+    } else {
+      console.log('didnt find user in database');
+      res.redirect('/login');
+    }
+  });
+});
+
+app.get('/signup', 
+function(req, res) {
+  res.render('signup');
+});
+
+app.post('/signup', 
+function(req, res) {
+  console.log('posted for signup');
+  console.log(req.body);
+  new User({ username: req.body.username }).fetch().then(function(found) {
+    if (found) {
+      console.log('Already signed up');
+    } else {
+      console.log('making a new user');
+      Users.create({
+        username: req.body.username,
+        password: req.body.password
+      })
+      .then(function(newUser) {
+        console.log(newUser);
+        res.status(200).send(newUser);
+      });
+    }
+    res.redirect('/login');
+  });
+});
 
 
 /************************************************************/
