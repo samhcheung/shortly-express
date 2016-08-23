@@ -27,13 +27,18 @@ h1 {
   list-style: none;
 }
 
-.navigation li {
+.navigation li .index {
   float: left;
 }
 
-.navigation .logout {
+.navigation li .create {
+  float: left;
+}
+
+.navigation li .logout {
   float: right;
 }
+
 
 .navigation li a , .logout {
   width: 100px;

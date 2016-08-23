@@ -37,7 +37,7 @@ var restrict = function(req, res, next) {
     req.session.error = 'Access denied!';
     res.redirect('/login');
   }
-};
+}; 
 
 
 
@@ -55,7 +55,10 @@ function(req, res) {
 app.get('/links', 
 function(req, res) {
   Links.reset().fetch().then(function(links) {
-    res.status(200).send(links.models);
+    console.log('sam', links.models);
+    console.log(req.session.user);
+
+    res.status(200).send(links.models[0]);
   });
 });
 
@@ -96,6 +99,7 @@ function(req, res) {
 /************************************************************/
 app.get('/login', 
 function(req, res) {
+  console.log('login screen session', req.session);
   res.render('login');
 });
 
@@ -145,6 +149,13 @@ function(req, res) {
     res.redirect('/login');
   });
 });
+
+app.get('/logout', function(req, res) {
+  req.session.destroy(function() {
+    res.redirect('/');
+  });
+});
+
 
 
 /************************************************************/
