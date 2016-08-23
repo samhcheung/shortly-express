@@ -55,43 +55,71 @@ function(req, res) {
 app.get('/links', 
 function(req, res) {
   Links.reset().fetch().then(function(links) {
-    console.log('sam', links.models);
-    console.log(req.session.user);
+    var userId = null;
+    new User({username: req.session.user}).fetch().then(function(found) {
+      if (found) {
+        userId = found.get('id');
+        var selectedUrls = [];
+        console.log('sam', links.models);
+        for (var i = 0; i < links.models.length; i++) {
+          if (links.models[i].get('userId') === userId) {
+            selectedUrls.push(links.models[i]);  
+          }
+        }
+        console.log(req.session.user);
 
-    res.status(200).send(links.models[0]);
+        res.status(200).send(selectedUrls);
+      } else {
+        console.log('should be empty list');
+        res.status(200).send(links.models);
+      }
+    });
   });
 });
 
 app.post('/links', 
 function(req, res) {
   var uri = req.body.url;
+  var userId = null;
 
   if (!util.isValidUrl(uri)) {
     console.log('Not a valid url: ', uri);
     return res.sendStatus(404);
   }
-
-  new Link({ url: uri }).fetch().then(function(found) {
+  new User({ username: req.session.user}).fetch().then(function (found) {
     if (found) {
-      res.status(200).send(found.attributes);
+      console.log('username id inside post links', found.get('id'));
+      userId = found.get('id');
     } else {
-      util.getUrlTitle(uri, function(err, title) {
-        if (err) {
-          console.log('Error reading URL heading: ', err);
-          return res.sendStatus(404);
-        }
-
-        Links.create({
-          url: uri,
-          title: title,
-          baseUrl: req.headers.origin
-        })
-        .then(function(newLink) {
-          res.status(200).send(newLink);
-        });
-      });
+      console.log('should always find username');
     }
+
+    new Link({ url: uri, userId: userId }).fetch().then(function(found) {
+      if (found) {
+        res.status(200).send(found.attributes);
+      } else {
+        util.getUrlTitle(uri, function(err, title) {
+          if (err) {
+            console.log('Error reading URL heading: ', err);
+            return res.sendStatus(404);
+          }
+
+          Links.create({
+            url: uri,
+            title: title,
+            baseUrl: req.headers.origin,
+            userId: userId 
+          })
+          .then(function(newLink) {
+            res.status(200).send(newLink);
+          });
+        });
+      }
+    });
+
+    
   });
+
 });
 
 /************************************************************/
@@ -135,6 +163,7 @@ function(req, res) {
   new User({ username: req.body.username }).fetch().then(function(found) {
     if (found) {
       console.log('Already signed up');
+      res.redirect('/login');
     } else {
       console.log('making a new user');
       Users.create({
@@ -146,7 +175,6 @@ function(req, res) {
         res.status(200).send(newUser);
       });
     }
-    res.redirect('/login');
   });
 });
 
