@@ -47,12 +47,12 @@ function(req, res) {
   res.render('index');
 });
 
-app.get('/create', 
+app.get('/create', restrict,
 function(req, res) {
   res.render('index');
 });
 
-app.get('/links', 
+app.get('/links', restrict,
 function(req, res) {
   Links.reset().fetch().then(function(links) {
     var userId = null;
@@ -138,7 +138,7 @@ function(req, res) {
   var username = req.body.username;
   var password = req.body.password;
   new User({ username: username }).fetch().then(function(found) {
-    if (found.get('password') === password) {
+    if (found && found.get('password') === password) {
       console.log('found the user in the database and logged in');
       req.session.regenerate( function() {
         req.session.user = username;
@@ -146,7 +146,8 @@ function(req, res) {
       });
     } else {
       console.log('didnt find user in database');
-      res.redirect('/login');
+      //res.status(400).send();
+      res.redirect(401, '/login');
     }
   });
 });
@@ -172,7 +173,11 @@ function(req, res) {
       })
       .then(function(newUser) {
         console.log(newUser);
-        res.status(200).send(newUser);
+        req.session.regenerate( function() {
+          req.session.user = req.body.username;
+          res.redirect(201, '/');
+          // res.status(200).send(newUser);
+        });
       });
     }
   });
@@ -193,10 +198,12 @@ app.get('/logout', function(req, res) {
 /************************************************************/
 
 app.get('/*', function(req, res) {
+  console.log('does it do a get request', req.body.url)
   new User({ username: req.session.user }).fetch().then(function(found) {
     if (found) {
       new Link({ code: req.params[0], userId: found.get('id') }).fetch().then(function(link) {
         if (!link) {
+          console.log('cant find link', req.params[0], found.get('id'));
           res.redirect('/');
         } else {
           console.log('we get in here I believe');
@@ -204,15 +211,17 @@ app.get('/*', function(req, res) {
             linkId: link.get('id')
           });
 
-          click.save().then(function() {
+          click.save().then(function() { 
             link.set('visits', link.get('visits') + 1);
             link.save().then(function() {
+              console.log('i think it should get here', link)
               return res.redirect(link.get('url'));
             });
           });
         }
       });
     } else { //not found
+      //console.log('not found', req.session.user, found)
       new Link({ code: req.params[0] }).fetch().then(function(link) {
         if (!link) {
           res.redirect('/');
@@ -220,9 +229,17 @@ app.get('/*', function(req, res) {
           var click = new Click({
             linkId: link.get('id')
           });
-          click.save();
-          res.redirect(link.get('url'));
-        }
+          click.save().then(function() { 
+            link.set('visits', link.get('visits') + 1);
+            link.save().then(function() {
+              console.log('i think it should get here', link)
+              return res.redirect(link.get('url'));
+            });
+          });
+
+
+
+        }//else
       });
     }
 
