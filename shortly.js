@@ -60,7 +60,7 @@ function(req, res) {
       if (found) {
         userId = found.get('id');
         var selectedUrls = [];
-        console.log('sam', links.models);
+        //console.log('sam', links.models);
         for (var i = 0; i < links.models.length; i++) {
           if (links.models[i].get('userId') === userId) {
             selectedUrls.push(links.models[i]);  
@@ -193,23 +193,40 @@ app.get('/logout', function(req, res) {
 /************************************************************/
 
 app.get('/*', function(req, res) {
-  new Link({ code: req.params[0] }).fetch().then(function(link) {
-    if (!link) {
-      res.redirect('/');
-    } else {
-      var click = new Click({
-        linkId: link.get('id')
-      });
+  new User({ username: req.session.user }).fetch().then(function(found) {
+    if (found) {
+      new Link({ code: req.params[0], userId: found.get('id') }).fetch().then(function(link) {
+        if (!link) {
+          res.redirect('/');
+        } else {
+          console.log('we get in here I believe');
+          var click = new Click({
+            linkId: link.get('id')
+          });
 
-      click.save().then(function() {
-        link.set('visits', link.get('visits') + 1);
-        link.save().then(function() {
-          return res.redirect(link.get('url'));
-        });
+          click.save().then(function() {
+            link.set('visits', link.get('visits') + 1);
+            link.save().then(function() {
+              return res.redirect(link.get('url'));
+            });
+          });
+        }
+      });
+    } else { //not found
+      new Link({ code: req.params[0] }).fetch().then(function(link) {
+        if (!link) {
+          res.redirect('/');
+        } else {
+          var click = new Click({
+            linkId: link.get('id')
+          });
+          click.save();
+          res.redirect(link.get('url'));
+        }
       });
     }
+
   });
 });
-
 console.log('Shortly is listening on 4568');
 app.listen(4568);
