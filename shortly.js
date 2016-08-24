@@ -3,7 +3,8 @@ var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var session = require('express-session');
-
+var passport = require('passport');
+var Strategy = require('passport-github').Strategy;
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -12,7 +13,27 @@ var Links = require('./app/collections/links');
 var Link = require('./app/models/link');
 var Click = require('./app/models/click');
 
+passport.use(new Strategy({
+  clientID: '59c58595ad45ecb4bef1',
+  clientSecret: '6a6f70bd85c98d85262fd4d314e6333948d80431',
+  callbackURL: 'http://127.0.0.1:4568/auth/github/callback'
+},
+function ( AccessToken, refreshToken, profile, cb) {
+  //console.log('PROFILE', profile);
+  return cb(null, profile);
+}));
+
+passport.serializeUser( function(user, cb) {
+  cb(null, user);
+});
+passport.deserializeUser(function(obj, cb) {
+  cb(null, obj);
+});
+
+
 var app = express();
+
+
 
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
@@ -29,21 +50,28 @@ app.use(session({
   resave: false
 }));
 
+app.use(passport.initialize());
+app.use(passport.session());
+
 
 var restrict = function(req, res, next) {
-  if (req.session.user) {
+  // if (req.session.user) {
+  if (req.isAuthenticated()) {
     next();
+
   } else {
     req.session.error = 'Access denied!';
-    res.redirect('/login');
+    res.redirect('/auth/github');
   }
 }; 
 
 
 
+// app.get('/', passport.authenticate('github'),
 app.get('/', restrict,
 function(req, res) {
   console.log('You made it');
+  console.log(req.session.passport.user.username);
   res.render('index');
 });
 
@@ -56,7 +84,7 @@ app.get('/links', restrict,
 function(req, res) {
   Links.reset().fetch().then(function(links) {
     var userId = null;
-    new User({username: req.session.user}).fetch().then(function(found) {
+    new User({username: req.session.passport.user.username}).fetch().then(function(found) {
       if (found) {
         userId = found.get('id');
         var selectedUrls = [];
@@ -66,7 +94,7 @@ function(req, res) {
             selectedUrls.push(links.models[i]);  
           }
         }
-        console.log(req.session.user);
+        // console.log(req.session.user);
 
         res.status(200).send(selectedUrls);
       } else {
@@ -86,12 +114,12 @@ function(req, res) {
     console.log('Not a valid url: ', uri);
     return res.sendStatus(404);
   }
-  new User({ username: req.session.user}).fetch().then(function (found) {
+  new User({ username: req.session.passport.user.username}).fetch().then(function (found) {
     if (found) {
       console.log('username id inside post links', found.get('id'));
       userId = found.get('id');
     } else {
-      console.log('should always find username');
+      console.log('should always find username',req.session);
     }
 
     new Link({ url: uri, userId: userId }).fetch().then(function(found) {
@@ -152,6 +180,39 @@ function(req, res) {
   });
 });
 
+app.get('/auth/github', passport.authenticate('github'));
+
+app.get('/auth/github/callback', passport.authenticate('github', {failureRedirect: '/login'}),
+  function(req, res) {
+    console.log('successps login and should redirect to mainpage');
+
+
+    new User({ username: req.user.username }).fetch().then(function(found) {
+      if (found) {
+        console.log('Already signed up FROM INSIDE GITHUB');
+      } else {
+        console.log('making a new user from inside github');
+        Users.create({
+          username: req.user.username,
+          password: 'githubuser'
+        })
+        .then(function(newUser) {
+          console.log(newUser);
+          // req.session.regenerate( function() {
+          //   req.session.user = req.user.username;
+          //   // res.status(200).send(newUser);
+          // });
+        });
+      }
+    });
+
+
+
+
+
+    res.redirect('/');
+  });
+
 app.get('/signup', 
 function(req, res) {
   res.render('signup');
@@ -198,15 +259,15 @@ app.get('/logout', function(req, res) {
 /************************************************************/
 
 app.get('/*', function(req, res) {
-  console.log('does it do a get request', req.body.url)
-  new User({ username: req.session.user }).fetch().then(function(found) {
+  // console.log('does it do a get request', req.body.url);
+  new User({ username: req.session.passport.user.username }).fetch().then(function(found) {
     if (found) {
       new Link({ code: req.params[0], userId: found.get('id') }).fetch().then(function(link) {
         if (!link) {
-          console.log('cant find link', req.params[0], found.get('id'));
+          // console.log('cant find link', req.params[0], found.get('id'));
           res.redirect('/');
         } else {
-          console.log('we get in here I believe');
+          // console.log('we get in here I believe');
           var click = new Click({
             linkId: link.get('id')
           });
@@ -214,7 +275,7 @@ app.get('/*', function(req, res) {
           click.save().then(function() { 
             link.set('visits', link.get('visits') + 1);
             link.save().then(function() {
-              console.log('i think it should get here', link)
+              // console.log('i think it should get here', link);
               return res.redirect(link.get('url'));
             });
           });
@@ -232,7 +293,7 @@ app.get('/*', function(req, res) {
           click.save().then(function() { 
             link.set('visits', link.get('visits') + 1);
             link.save().then(function() {
-              console.log('i think it should get here', link)
+              // console.log('i think it should get here', link);
               return res.redirect(link.get('url'));
             });
           });
